@@ -50,35 +50,50 @@ module bp_cce_fsm
     , localparam counter_max = 256
     , localparam hash_index_width_lp=$clog2((2**lg_lce_sets_lp+num_cce_p-1)/num_cce_p)
   )
-  (input                                               clk_i
-   , input                                             reset_i
+  (input                                            clk_i
+   , input                                          reset_i
 
    // Config channel
-   , input [cfg_bus_width_lp-1:0]                      cfg_bus_i
+   , input [cfg_bus_width_lp-1:0]                   cfg_bus_i
 
    // LCE-CCE Interface
-   , input [lce_req_msg_width_lp-1:0]                  lce_req_i
-   , input                                             lce_req_v_i
-   , output logic                                      lce_req_yumi_o
+   // BP Burst protocol: ready&valid
+   , input [lce_req_msg_header_width_lp-1:0]        lce_req_header_i
+   , input                                          lce_req_header_v_i
+   , output logic                                   lce_req_header_ready_o
+   , input [dword_width_p-1:0]                      lce_req_data_i
+   , input                                          lce_req_data_v_i
+   , output logic                                   lce_req_data_ready_o
 
-   , input [lce_resp_msg_width_lp-1:0]                 lce_resp_i
-   , input                                             lce_resp_v_i
-   , output logic                                      lce_resp_yumi_o
+   , input [lce_resp_msg_header_width_lp-1:0]       lce_resp_header_i
+   , input                                          lce_resp_header_v_i
+   , output logic                                   lce_resp_header_ready_o
+   , input [dword_width_p-1:0]                      lce_resp_data_i
+   , input                                          lce_resp_data_v_i
+   , output logic                                   lce_resp_data_ready_o
 
-   // ready->valid
-   , output logic [lce_cmd_msg_width_lp-1:0]           lce_cmd_o
-   , output logic                                      lce_cmd_v_o
-   , input                                             lce_cmd_ready_i
+   , output logic [lce_cmd_msg_header_width_lp-1:0] lce_cmd_header_o
+   , output logic                                   lce_cmd_header_v_o
+   , input                                          lce_cmd_header_ready_i
+   , output logic [dword_width_p-1:0]               lce_cmd_data_o
+   , output logic                                   lce_cmd_data_v_o
+   , input                                          lce_cmd_data_ready_i
 
    // CCE-MEM Interface
-   , input [cce_mem_msg_width_lp-1:0]                  mem_resp_i
-   , input                                             mem_resp_v_i
-   , output logic                                      mem_resp_yumi_o
+   // BP Burst protocol: ready&valid
+   , input [cce_mem_msg_header_width_lp-1:0]        mem_resp_header_i
+   , input                                          mem_resp_header_v_i
+   , output logic                                   mem_resp_header_ready_o
+   , input [dword_width_p-1:0]                      mem_resp_data_i
+   , input                                          mem_resp_data_v_i
+   , output logic                                   mem_resp_data_ready_o
 
-   // ready->valid
-   , output logic [cce_mem_msg_width_lp-1:0]           mem_cmd_o
-   , output logic                                      mem_cmd_v_o
-   , input                                             mem_cmd_ready_i
+   , output logic [cce_mem_msg_header_width_lp-1:0] mem_cmd_header_o
+   , output logic                                   mem_cmd_header_v_o
+   , input                                          mem_cmd_header_ready_i
+   , output logic [dword_width_p-1:0]               mem_cmd_data_o
+   , output logic                                   mem_cmd_data_v_o
+   , input                                          mem_cmd_data_ready_i
 
   );
 

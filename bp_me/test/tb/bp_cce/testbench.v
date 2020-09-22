@@ -325,6 +325,8 @@ logic [cce_pc_width_p-1:0] cce_ucode_addr_li;
 logic [cce_instr_width_p-1:0] cce_ucode_data_li;
 logic [cce_instr_width_p-1:0] cce_ucode_data_lo;
 
+// TODO: burst to lite and lite to burst converters here
+
 // CCE
 wrapper
 #(.bp_params_p(bp_params_p)
@@ -342,25 +344,45 @@ wrapper
   ,.ucode_data_i(cce_ucode_data_li)
   ,.ucode_data_o(cce_ucode_data_lo)
 
-  ,.lce_cmd_o(lce_cmd_lo)
-  ,.lce_cmd_v_o(lce_cmd_v_lo)
-  ,.lce_cmd_ready_i(lce_cmd_ready_li)
+  // LCE-CCE Interface
+  // BP Burst protocol: ready&valid
+  ,.lce_req_header_i(lce_req_header)
+  ,.lce_req_header_v_i(lce_req_header_v)
+  ,.lce_req_header_ready_o(lce_req_header_ready)
+  ,.lce_req_data_i(lce_req_data)
+  ,.lce_req_data_v_i(lce_req_data_v)
+  ,.lce_req_data_ready_o(lce_req_data_ready)
 
-  ,.lce_req_i(lce_req)
-  ,.lce_req_v_i(lce_req_v)
-  ,.lce_req_yumi_o(lce_req_yumi)
+  ,.lce_resp_header_i(lce_resp_header)
+  ,.lce_resp_header_v_i(lce_resp_header_v)
+  ,.lce_resp_header_ready_o(lce_resp_header_ready)
+  ,.lce_resp_data_i(lce_resp_data)
+  ,.lce_resp_data_v_i(lce_resp_data_v)
+  ,.lce_resp_data_ready_o(lce_resp_data_ready)
 
-  ,.lce_resp_i(lce_resp)
-  ,.lce_resp_v_i(lce_resp_v)
-  ,.lce_resp_yumi_o(lce_resp_yumi)
+  ,.lce_cmd_header_o(lce_cmd_header)
+  ,.lce_cmd_header_v_o(lce_cmd_header_v)
+  ,.lce_cmd_header_ready_i(lce_cmd_header_ready)
+  ,.lce_cmd_data_o(lce_cmd_data)
+  ,.lce_cmd_data_v_o(lce_cmd_data_v)
+  ,.lce_cmd_data_ready_i(lce_cmd_data_ready)
 
-  ,.mem_resp_i(mem_resp)
-  ,.mem_resp_v_i(mem_resp_v)
-  ,.mem_resp_yumi_o(mem_resp_yumi)
+  // CCE-MEM Interface
+  // BP Burst protocol: ready&valid
+  ,.mem_resp_header_i(mem_resp_header)
+  ,.mem_resp_header_v_i(mem_resp_header_v)
+  ,.mem_resp_header_ready_o(mem_resp_header_ready)
+  ,.mem_resp_data_i(mem_resp_data)
+  ,.mem_resp_data_v_i(mem_resp_data_v)
+  ,.mem_resp_data_ready_o(mem_resp_data_ready)
 
-  ,.mem_cmd_o(mem_cmd)
-  ,.mem_cmd_v_o(mem_cmd_v)
-  ,.mem_cmd_ready_i(mem_cmd_ready)
+  ,.mem_cmd_header_o(mem_cmd_header)
+  ,.mem_cmd_header_v_o(mem_cmd_header_v)
+  ,.mem_cmd_header_ready_i(mem_cmd_header_ready)
+  ,.mem_cmd_data_o(mem_cmd_data)
+  ,.mem_cmd_data_v_o(mem_cmd_data_v)
+  ,.mem_cmd_data_ready_i(mem_cmd_data_ready)
+
 );
 
 
