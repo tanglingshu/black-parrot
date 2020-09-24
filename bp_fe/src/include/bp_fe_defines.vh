@@ -60,7 +60,6 @@
     logic ovr;                      \
     logic taken;                    \
                                     \
-    logic [vaddr_width_mp-1:0] pc;  \
     logic [ghist_width_mp-1:0] ghist; \
   }  bp_fe_pc_gen_stage_s
 
@@ -68,7 +67,7 @@
   (vaddr_width_mp + 5)
 
 `define bp_fe_pc_gen_stage_width(vaddr_width_mp, ghist_width_mp) \
-  (7 + vaddr_width_mp + ghist_width_mp)
+  (7 + ghist_width_mp)
 
 `endif
 

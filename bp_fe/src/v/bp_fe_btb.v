@@ -147,6 +147,5 @@ module bp_fe_btb
   assign br_tgt_jmp_o = r_v_r & tag_mem_data_bypass_lo.v & tag_mem_data_bypass_lo.jmp;
   assign br_tgt_o     = tag_mem_data_bypass_lo.tgt;
 
-
 endmodule
 

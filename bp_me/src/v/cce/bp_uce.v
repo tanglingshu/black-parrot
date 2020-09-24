@@ -6,8 +6,8 @@ module bp_uce
   import bp_common_cfg_link_pkg::*;
   import bp_me_pkg::*;
   #(parameter bp_params_e bp_params_p = e_bp_default_cfg
-    , parameter uce_mem_data_width_p = "inv"
     `declare_bp_proc_params(bp_params_p)
+    , parameter uce_mem_data_width_p = cce_block_width_p
     `declare_bp_bedrock_mem_if_widths(paddr_width_p, uce_mem_data_width_p, lce_id_width_p, lce_assoc_p, uce)
     , parameter assoc_p = 8
     , parameter sets_p = 64
@@ -383,7 +383,7 @@ module bp_uce
   logic mem_cmd_done_r;
   bsg_dff_reset_set_clear
    #(.width_p(1)
-    ,.clear_over_set_p(1)) // if 1, clear overrides set.
+    ,.clear_over_set_p(1))
    mem_cmd_done_reg
     (.clk_i(clk_i)
     ,.reset_i(reset_i)
