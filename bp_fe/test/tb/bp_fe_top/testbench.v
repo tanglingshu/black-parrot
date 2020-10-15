@@ -9,7 +9,7 @@ module testbench
  import bp_cce_pkg::*;
  #(parameter bp_params_e bp_params_p = BP_CFG_FLOWVAR
    `declare_bp_proc_params(bp_params_p)
-   `declare_bp_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce_mem)
+   `declare_bp_bedrock_mem_if_widths(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
 
    , parameter trace_file_p = "test.tr"
    , parameter start_pc_p = 32'h8000_0000
@@ -23,7 +23,7 @@ module testbench
    , input dram_reset_i
    );
 
-  `declare_bp_mem_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce_mem)
+  `declare_bp_bedrock_mem_if(paddr_width_p, cce_block_width_p, lce_id_width_p, lce_assoc_p, cce)
   `declare_bp_cfg_bus_s(vaddr_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p, cce_pc_width_p, cce_instr_width_p);
   bp_cfg_bus_s cfg_bus_li;
 
@@ -41,9 +41,9 @@ module testbench
   logic fe_cmd_v_li, fe_cmd_yumi_lo;
   bp_fe_queue_s fe_queue_lo;
   logic fe_queue_v_lo, fe_queue_ready_li;
-  bp_cce_mem_msg_s mem_cmd_lo;
+  bp_bedrock_cce_mem_msg_s mem_cmd_lo;
   logic mem_cmd_v_lo, mem_cmd_ready_li;
-  bp_cce_mem_msg_s mem_resp_li;
+  bp_bedrock_cce_mem_msg_s mem_resp_li;
   logic mem_resp_v_li, mem_resp_yumi_lo;
   wrapper 
    #(.bp_params_p(bp_params_p))
