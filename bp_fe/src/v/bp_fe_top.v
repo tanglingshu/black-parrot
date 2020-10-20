@@ -357,6 +357,8 @@ module bp_fe_top
   /////////////////////////////////////////////////////////////////////////////
   // Fetch state machine
   /////////////////////////////////////////////////////////////////////////////
+  // Need to stop at resume state to allow for TLB fill or other multicycle cmds
+  //   but TODO: not all commands
   always_comb
     case (state_r)
       e_wait   : state_n = cmd_nonattaboy_v ? e_run : e_wait;
