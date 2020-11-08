@@ -60,7 +60,7 @@ module bp_uce
     , output logic [cache_tag_mem_pkt_width_lp-1:0]  tag_mem_pkt_o
     , output logic                                   tag_mem_pkt_v_o
     , input                                          tag_mem_pkt_yumi_i
-    , input [ptag_width_p-1:0]                       tag_mem_i
+    , input [cache_tag_info_width_lp-1:0]            tag_mem_i
 
     , output logic [cache_data_mem_pkt_width_lp-1:0] data_mem_pkt_o
     , output logic                                   data_mem_pkt_v_o
@@ -203,9 +203,9 @@ module bp_uce
      ,.data_o(dirty_tag_v_r)
      );
 
-  logic [ptag_width_p-1:0] dirty_tag_r;
+  bp_cache_tag_info_s dirty_tag_r;
   bsg_dff_en
-   #(.width_p(ptag_width_p))
+   #(.width_p($bits(bp_cache_tag_info_s)))
    dirty_tag_reg
     (.clk_i(tag_mem_clk)
 
@@ -251,19 +251,19 @@ module bp_uce
 
   // We can do a little better by sending the read_request before the writeback
   enum logic [3:0] {e_reset, e_clear, e_flush_read, e_flush_scan, e_flush_write, e_flush_fence, e_ready, e_send_critical, e_writeback_evict, e_writeback_read_req, e_writeback_write_req, e_write_wait, e_read_req, e_uc_read_wait} state_n, state_r;
-  wire is_reset         = (state_r == e_reset);
-  wire is_clear         = (state_r == e_clear);
-  wire is_flush_read    = (state_r == e_flush_read);
-  wire is_flush_scan    = (state_r == e_flush_scan);
-  wire is_flush_write   = (state_r == e_flush_write);
-  wire is_flush_fence   = (state_r == e_flush_fence);
-  wire is_ready         = (state_r == e_ready);
-  wire is_send_critical = (state_r == e_send_critical);
+  wire is_reset           = (state_r == e_reset);
+  wire is_clear           = (state_r == e_clear);
+  wire is_flush_read      = (state_r == e_flush_read);
+  wire is_flush_scan      = (state_r == e_flush_scan);
+  wire is_flush_write     = (state_r == e_flush_write);
+  wire is_flush_fence     = (state_r == e_flush_fence);
+  wire is_ready           = (state_r == e_ready);
+  wire is_send_critical   = (state_r == e_send_critical);
   wire is_writeback_evict = (state_r == e_writeback_evict); // read dirty data from cache to UCE
-  wire is_writeback_read = (state_r == e_writeback_read_req); // read data from L2 to cache
-  wire is_writeback_wb   = (state_r == e_writeback_write_req); // send dirty data from UCE to L2
-  wire is_write_request  = (state_r == e_write_wait);
-  wire is_read_request   = (state_r == e_read_req);
+  wire is_writeback_read  = (state_r == e_writeback_read_req); // read data from L2 to cache
+  wire is_writeback_wb    = (state_r == e_writeback_write_req); // send dirty data from UCE to L2
+  wire is_write_request   = (state_r == e_write_wait);
+  wire is_read_request    = (state_r == e_read_req);
 
   // We check for uncached stores ealier than other requests, because they get sent out in ready
   wire flush_v_li         = cache_req_v_i & cache_req_cast_i.msg_type inside {e_cache_flush};
@@ -419,12 +419,30 @@ module bp_uce
   logic [fill_width_p-1:0] writeback_data;
   bsg_mux
    #(.width_p(fill_width_p)
-    ,.els_p(block_size_in_fill_lp))
+     ,.els_p(block_size_in_fill_lp)
+     )
    writeback_mux
     (.data_i(dirty_data_r)
-    ,.sel_i(mem_cmd_cnt)
-    ,.data_o(writeback_data)
-    );
+     ,.sel_i(mem_cmd_cnt)
+     ,.data_o(writeback_data)
+     );
+
+  // We expect the critical word to come back first, so we can simply
+  //   start waiting when we enter the sending state, and then we'll
+  //   know the next non-write response will be critical
+  logic critical_pending;
+  wire critical_sent = is_send_critical & mem_cmd_v_o;
+  wire critical_recv = mem_resp_yumi_o & load_resp_v_li;
+  bsg_dff_reset_set_clear
+   #(.width_p(1))
+   critical_pending_reg
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+     ,.set_i(critical_sent)
+     ,.clear_i(critical_recv)
+     ,.data_o(critical_pending)
+     );
+  assign cache_req_critical_o = critical_pending & critical_recv;
 
   // We ack mem_resps for uncached stores no matter what, so mem_resp_yumi_lo is for other responses
   logic mem_resp_yumi_lo;
@@ -446,7 +464,6 @@ module bp_uce
       stat_mem_pkt_v_o    = '0;
 
       cache_req_complete_o = '0;
-      cache_req_critical_o = '0;
 
       mem_cmd_cast_o   = '0;
       mem_cmd_cast_payload = '0;
@@ -525,7 +542,7 @@ module bp_uce
         e_flush_write:
           begin
             mem_cmd_cast_o.header.msg_type = e_bedrock_mem_wr;
-            mem_cmd_cast_o.header.addr     = {dirty_tag_r, index_cnt, bank_index, byte_offset_width_lp'(0)};
+            mem_cmd_cast_o.header.addr     = {dirty_tag_r.tag, index_cnt, bank_index, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size     = block_msg_size_lp;
             mem_cmd_cast_payload.lce_id    = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
@@ -650,7 +667,6 @@ module bp_uce
             data_mem_pkt_cast_o.fill_index = 1'b1 << fill_index_shift;
             data_mem_pkt_v_o = load_resp_v_li;
 
-            cache_req_critical_o = '0;
             fill_up = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
             mem_resp_yumi_lo = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
             // request next sub-block
@@ -668,7 +684,7 @@ module bp_uce
         e_writeback_write_req:
           begin
             mem_cmd_cast_o.header.msg_type = e_bedrock_mem_wr;
-            mem_cmd_cast_o.header.addr     = {dirty_tag_r, cache_req_r.addr[block_offset_width_lp+:index_width_lp], bank_index, byte_offset_width_lp'(0)};
+            mem_cmd_cast_o.header.addr     = {dirty_tag_r.tag, cache_req_r.addr[block_offset_width_lp+:index_width_lp], bank_index, byte_offset_width_lp'(0)};
             mem_cmd_cast_o.header.size     = block_msg_size_lp;
             mem_cmd_cast_payload.lce_id    = lce_id_i;
             mem_cmd_cast_o.header.payload = mem_cmd_cast_payload;
@@ -697,7 +713,6 @@ module bp_uce
             data_mem_pkt_cast_o.fill_index = 1'b1 << fill_index_shift;
             data_mem_pkt_v_o = load_resp_v_li;
 
-            cache_req_critical_o = '0;
             fill_up = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
             mem_resp_yumi_lo = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
             // request next sub-block
@@ -716,7 +731,7 @@ module bp_uce
         e_uc_read_wait:
           begin
             data_mem_pkt_cast_o.opcode = e_cache_data_mem_uncached;
-            data_mem_pkt_cast_o.data = mem_resp_cast_i.data;
+            data_mem_pkt_cast_o.data = {(fill_width_p/dword_width_p){mem_resp_cast_i.data[0+:dword_width_p]}};
             data_mem_pkt_v_o = load_resp_v_li;
 
             cache_req_complete_o = data_mem_pkt_yumi_i;

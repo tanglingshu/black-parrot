@@ -79,7 +79,7 @@ module bp_be_calculator_top
   , input tag_mem_pkt_v_i
   , input [dcache_tag_mem_pkt_width_lp-1:0] tag_mem_pkt_i
   , output logic tag_mem_pkt_yumi_o
-  , output logic [ptag_width_p-1:0] tag_mem_o
+  , output logic [dcache_tag_info_width_lp-1:0] tag_mem_o
 
   // stat_mem
   , input stat_mem_pkt_v_i
@@ -480,6 +480,7 @@ module bp_be_calculator_top
           exc_stage_n[3].poison_v               |= pipe_sys_miss_v_lo | pipe_sys_exc_v_lo;
 
           exc_stage_n[0].exc.itlb_miss          |= reservation_n.decode.itlb_miss;
+          exc_stage_n[0].exc.icache_miss        |= reservation_n.decode.icache_miss;
           exc_stage_n[0].exc.instr_access_fault |= reservation_n.decode.instr_access_fault;
           exc_stage_n[0].exc.instr_page_fault   |= reservation_n.decode.instr_page_fault;
           exc_stage_n[0].exc.illegal_instr      |= reservation_n.decode.illegal_instr;
