@@ -29,7 +29,9 @@ module bp_be_pipe_fma
   (input                               clk_i
    , input                             reset_i
 
+   , output                            ready_o
    , input [dispatch_pkt_width_lp-1:0] reservation_i
+   , input                             flush_i
    , input rv64_frm_e                  frm_dyn_i
 
    // Pipeline results
@@ -210,6 +212,8 @@ module bp_be_pipe_fma
      ,.data_i({fma_v_li, fma_fflags, fma_result})
      ,.data_o({fma_v_o, fma_fflags_o, fma_data_o})
      );
+
+  assign ready_o = 1'b1;
 
 endmodule
 

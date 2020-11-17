@@ -8,10 +8,7 @@
  *     and sends redirect signals to the FE when a misprediction is detected.
  *
  * Notes:
- *   Branch_metadata should come from the target instruction, not the branch instruction,
- *     eliminating the need to store this in the BE
- *   We don't currently support MTVAL or EPC, so error muxes are disconnected
- *   FE cmd adapter could be split into a separate module
+ *
  */
 
 module bp_be_director
@@ -30,8 +27,6 @@ module bp_be_director
    , localparam branch_pkt_width_lp = `bp_be_branch_pkt_width(vaddr_width_p)
    , localparam commit_pkt_width_lp = `bp_be_commit_pkt_width(vaddr_width_p)
    , localparam ptw_fill_pkt_width_lp = `bp_be_ptw_fill_pkt_width(vaddr_width_p)
-
-   , localparam debug_lp = 0
    )
   (input                              clk_i
    , input                            reset_i
@@ -89,7 +84,7 @@ module bp_be_director
 
   // Module instantiations
   // Update the NPC on a valid instruction in ex1 or a cache miss or a tlb miss
-  wire npc_w_v = br_pkt.v | commit_pkt.v | ptw_fill_pkt.itlb_fill_v;
+  wire npc_w_v = br_pkt.v | commit_pkt.npc_w_v | ptw_fill_pkt.itlb_fill_v;
   bsg_dff_reset_en
    #(.width_p(vaddr_width_p), .reset_val_p($unsigned(boot_pc_p)))
    npc
@@ -100,10 +95,10 @@ module bp_be_director
      ,.data_i(npc_n)
      ,.data_o(npc_r)
      );
-  assign npc_n = ptw_fill_pkt.itlb_fill_v ? ptw_fill_pkt.vaddr : commit_pkt.v ? commit_pkt.npc : br_pkt.npc;
+  assign npc_n = ptw_fill_pkt.itlb_fill_v ? ptw_fill_pkt.vaddr : commit_pkt.npc_w_v ? commit_pkt.npc : br_pkt.npc;
 
   assign npc_mismatch_v = isd_status.isd_v & (expected_npc_o != isd_status.isd_pc);
-  assign poison_isd_o = npc_mismatch_v | flush_o;
+  assign poison_isd_o = npc_mismatch_v;
 
   logic btaken_pending, attaboy_pending;
   bsg_dff_reset_set_clear
@@ -296,25 +291,6 @@ module bp_be_director
      ,.yumi_i(fe_cmd_yumi_i)
      );
   assign fe_cmd_full_o = ~fe_cmd_ready_lo;
-
-  //synopsys translate_off
-  `declare_bp_fe_branch_metadata_fwd_s(btb_tag_width_p, btb_idx_width_p, bht_idx_width_p, ghist_width_p);
-  bp_fe_branch_metadata_fwd_s attaboy_md;
-  bp_fe_branch_metadata_fwd_s redir_md;
-
-  assign attaboy_md = fe_cmd_li.operands.attaboy.branch_metadata_fwd;
-  assign redir_md = fe_cmd_li.operands.pc_redirect_operands.branch_metadata_fwd;
-
-  always_ff @(negedge clk_i)
-    if (debug_lp) begin
-      if (fe_cmd_v_li & (fe_cmd_li.opcode == e_op_pc_redirection))
-        $display("[REDIR  ] %x->%x %p", isd_status.isd_pc, fe_cmd_li.vaddr, redir_md);
-      else if (fe_cmd_v_li & (fe_cmd_li.opcode == e_op_attaboy))
-        $display("[ATTABOY] %x %p", fe_cmd_li.vaddr, attaboy_md);
-      else if (isd_status.isd_v)
-        $display("[FETCH  ] %x   ", isd_status.isd_pc);
-    end
-  //synopsys translate_on
 
 endmodule
 

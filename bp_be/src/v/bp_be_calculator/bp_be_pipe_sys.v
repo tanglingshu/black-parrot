@@ -32,12 +32,9 @@ module bp_be_pipe_sys
 
    , input [cfg_bus_width_lp-1:0]         cfg_bus_i
 
+   , output                               ready_o
    , input [dispatch_pkt_width_lp-1:0]    reservation_i
    , input                                flush_i
-
-   , output                               ready_o
-   , input                                pipe_mem_ready_i
-   , input                                pipe_long_ready_i
 
    , input                                commit_v_i
    , input                                commit_queue_v_i
@@ -46,8 +43,6 @@ module bp_be_pipe_sys
    , output [ptw_miss_pkt_width_lp-1:0]   ptw_miss_pkt_o
    , input [ptw_fill_pkt_width_lp-1:0]    ptw_fill_pkt_i
 
-   , output logic                         miss_v_o
-   , output logic                         exc_v_o
    , output logic [dpath_width_p-1:0]     data_o
    , output logic                         v_o
 
@@ -58,6 +53,7 @@ module bp_be_pipe_sys
    , input                                timer_irq_i
    , input                                software_irq_i
    , input                                external_irq_i
+   , output logic                         pending_irq_o
 
    , output [trans_info_width_lp-1:0]     trans_info_o
    , output rv64_frm_e                    frm_dyn_o
@@ -93,6 +89,7 @@ module bp_be_pipe_sys
 
   wire csr_imm_op = decode.fu_op inside {e_csrrwi, e_csrrsi, e_csrrci};
 
+  wire csr_cmd_v_li = reservation.v & ~reservation.poison & decode.csr_v;
   always_comb
     begin
       csr_cmd_li.csr_op   = decode.fu_op;
@@ -107,9 +104,9 @@ module bp_be_pipe_sys
      )
    csr_shift_reg
     (.clk(clk_i)
-     ,.reset_i(reset_i)
+     ,.reset_i(reset_i | flush_i)
 
-     ,.valid_i(decode.csr_v)
+     ,.valid_i(csr_cmd_v_li)
      ,.data_i(csr_cmd_li)
 
      ,.valid_o(csr_cmd_v_lo)
@@ -119,60 +116,20 @@ module bp_be_pipe_sys
   logic [vaddr_width_p-1:0] commit_npc_r, commit_pc_r;
   logic [vaddr_width_p-1:0] commit_nvaddr_r, commit_vaddr_r;
   logic [instr_width_p-1:0] commit_ninstr_r, commit_instr_r;
-
-  // Track if an incoming tlb miss is store or load
-  logic is_store_r;
-  bsg_dff_chain
-   #(.width_p(1)
-     ,.num_stages_p(2)
-     )
-   store_reg
-    (.clk_i(clk_i)
-
-     ,.data_i(decode.dcache_w_v)
-     ,.data_o(is_store_r)
-     );
+  logic                     commit_nstore_r, commit_store_r;
 
   bp_be_exception_s exception_li;
-  always_comb
-    if (ptw_fill_pkt.instr_page_fault_v)
-      begin
-        exception_li = '{instr_page_fault: 1'b1, default: '0};
-      end
-    else if (ptw_fill_pkt.store_page_fault_v)
-      begin
-        exception_li = '{store_page_fault: 1'b1, default: '0};
-      end
-    else if (ptw_fill_pkt.load_page_fault_v)
-      begin
-        exception_li = '{load_page_fault: 1'b1, default: '0};
-      end
-    else if (commit_v_i)
-      begin
-        exception_li = exception_i;
-      end
-    else
-      begin
-        exception_li = '0;
-      end
+  assign exception_li = exception_i;
 
   always_comb
     begin
       ptw_miss_pkt.instr_miss_v = commit_v_i & exception_li.itlb_miss;
-      ptw_miss_pkt.load_miss_v  = commit_v_i & exception_li.dtlb_miss & ~is_store_r;
-      ptw_miss_pkt.store_miss_v = commit_v_i & exception_li.dtlb_miss & is_store_r;
-      ptw_miss_pkt.vaddr        = exception_li.itlb_miss ? commit_pc_r : commit_vaddr_r;
+      ptw_miss_pkt.load_miss_v  = commit_v_i & exception_li.dtlb_miss & ~commit_store_r;
+      ptw_miss_pkt.store_miss_v = commit_v_i & exception_li.dtlb_miss &  commit_store_r;
+      ptw_miss_pkt.vaddr        = commit_vaddr_r;
     end
 
-  wire ptw_page_fault_v  = ptw_fill_pkt.instr_page_fault_v | ptw_fill_pkt.load_page_fault_v | ptw_fill_pkt.store_page_fault_v;
-  wire exception_v_li = ptw_page_fault_v | commit_v_i;
-  wire exception_queue_v_li = commit_queue_v_i;
-  wire [vaddr_width_p-1:0] exception_npc_li = commit_npc_r;
-  wire [vaddr_width_p-1:0] exception_vaddr_li = ptw_page_fault_v ? ptw_fill_pkt.vaddr : commit_vaddr_r;
-  wire [instr_width_p-1:0] exception_instr_li = commit_instr_r;
-
   logic [dword_width_p-1:0] csr_data_lo;
-  logic interrupt_ready_lo, interrupt_v_li;
   bp_be_csr
    #(.bp_params_p(bp_params_p))
     csr
@@ -182,24 +139,23 @@ module bp_be_pipe_sys
      ,.cfg_bus_i(cfg_bus_i)
 
      ,.csr_cmd_i(csr_cmd_r)
-     ,.csr_cmd_v_i(csr_cmd_v_lo & commit_v_i)
+     ,.csr_cmd_v_i(csr_cmd_v_lo)
      ,.csr_data_o(csr_data_lo)
 
      ,.fflags_acc_i(({5{iwb_pkt.fflags_w_v}} & iwb_pkt.fflags) | ({5{fwb_pkt.fflags_w_v}} & fwb_pkt.fflags))
      ,.frf_w_v_i(fwb_pkt.frd_w_v)
 
-     ,.exception_v_i(exception_v_li)
-     ,.exception_queue_v_i(exception_queue_v_li)
-     ,.exception_npc_i(exception_npc_li)
-     ,.exception_vaddr_i(exception_vaddr_li)
-     ,.exception_instr_i(exception_instr_li)
+     ,.exception_v_i(commit_v_i)
+     ,.exception_queue_v_i(commit_queue_v_i)
+     ,.exception_npc_i(commit_npc_r)
+     ,.exception_vaddr_i(commit_vaddr_r)
+     ,.exception_instr_i(commit_instr_r)
      ,.exception_i(exception_li)
 
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
-     ,.interrupt_ready_o(interrupt_ready_lo)
-     ,.interrupt_v_i(interrupt_v_li)
+     ,.interrupt_ready_o(pending_irq_o)
 
      ,.commit_pkt_o(commit_pkt)
      ,.trans_info_o(trans_info)
@@ -207,24 +163,26 @@ module bp_be_pipe_sys
      ,.fpu_en_o(fpu_en_o)
      );
 
-  assign interrupt_v_li   = interrupt_ready_lo & pipe_mem_ready_i & pipe_long_ready_i & ~commit_v_i;
-
   always_ff @(posedge clk_i)
     begin
       commit_npc_r <= reservation.pc;
       commit_pc_r  <= commit_npc_r;
 
-      commit_nvaddr_r <= rs1 + imm;
+      // The commit virtual address, which is rs1+imm for all actual instructions
+      //   and imm for out-of-band exceptions and interrupts
+      commit_nvaddr_r <= reservation.decode.queue_v ? (rs1 + imm) : imm;
       commit_vaddr_r  <= commit_nvaddr_r;
 
       commit_ninstr_r <= reservation.instr;
       commit_instr_r  <= commit_ninstr_r;
+
+      commit_nstore_r <= decode.dcache_w_v;
+      commit_store_r  <= commit_nstore_r;
     end
 
-  assign ready_o          = ~interrupt_ready_lo;
-  assign data_o           = csr_data_lo;
-  assign exc_v_o          = commit_pkt.exception;
-  assign miss_v_o         = commit_pkt.rollback;
+  assign ready_o = 1'b1;
+
+  assign data_o  = csr_data_lo;
 
   wire sys_v_li = reservation.v & ~reservation.poison & reservation.decode.pipe_sys_v;
   bsg_dff_chain

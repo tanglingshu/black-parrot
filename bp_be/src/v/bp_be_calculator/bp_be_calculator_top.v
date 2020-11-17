@@ -58,6 +58,7 @@ module bp_be_calculator_top
   , input                                           timer_irq_i
   , input                                           software_irq_i
   , input                                           external_irq_i
+  , output logic                                    pending_irq_o
 
   , output logic [dcache_req_width_lp-1:0]          cache_req_o
   , output logic                                    cache_req_v_o
@@ -125,8 +126,6 @@ module bp_be_calculator_top
   logic [dpath_width_p-1:0] pipe_ctl_data_lo, pipe_int_data_lo, pipe_aux_data_lo, pipe_mem_early_data_lo, pipe_mem_final_data_lo, pipe_sys_data_lo, pipe_mul_data_lo, pipe_fma_data_lo;
   rv64_fflags_s pipe_aux_fflags_lo, pipe_fma_fflags_lo;
 
-  logic pipe_sys_exc_v_lo, pipe_sys_miss_v_lo;
-
   // Forwarding information
   logic [pipe_stage_els_lp:1]                        comp_stage_n_slice_iwb_v;
   logic [pipe_stage_els_lp:1]                        comp_stage_n_slice_fwb_v;
@@ -180,10 +179,11 @@ module bp_be_calculator_top
   bp_be_dispatch_pkt_s reservation_n, reservation_r;
   always_comb
     begin
-      reservation_n        = dispatch_pkt_i;
-      reservation_n.rs1    = bypass_rs1;
-      reservation_n.rs2    = bypass_rs2;
-      reservation_n.imm    = bypass_rs3;
+      reservation_n         = dispatch_pkt_i;
+      reservation_n.poison |= flush_i;
+      reservation_n.rs1     = bypass_rs1;
+      reservation_n.rs2     = bypass_rs2;
+      reservation_n.imm     = bypass_rs3;
     end
 
   bsg_dff
@@ -194,12 +194,14 @@ module bp_be_calculator_top
      ,.data_o(reservation_r)
      );
 
+  logic pipe_ctl_ready_lo;
   bp_be_pipe_ctl
    #(.bp_params_p(bp_params_p))
    pipe_ctl
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.ready_o(pipe_ctl_ready_lo)
      ,.reservation_i(reservation_r)
      ,.flush_i(flush_i)
 
@@ -210,26 +212,32 @@ module bp_be_calculator_top
 
   // Computation pipelines
   // Integer pipe: 1 cycle latency
+  logic pipe_int_ready_lo;
   bp_be_pipe_int
    #(.bp_params_p(bp_params_p))
    pipe_int
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.ready_o(pipe_int_ready_lo)
      ,.reservation_i(reservation_r)
+     ,.flush_i(flush_i)
 
      ,.data_o(pipe_int_data_lo)
      ,.v_o(pipe_int_data_lo_v)
      );
 
   // Aux pipe: 2 cycle latency
+  logic pipe_aux_ready_lo;
   bp_be_pipe_aux
    #(.bp_params_p(bp_params_p), .latency_p(2))
    pipe_aux
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.ready_o(pipe_aux_ready_lo)
      ,.reservation_i(reservation_r)
+     ,.flush_i(flush_i)
      ,.frm_dyn_i(frm_dyn_lo)
 
      ,.data_o(pipe_aux_data_lo)
@@ -247,12 +255,12 @@ module bp_be_calculator_top
 
      ,.cfg_bus_i(cfg_bus_i)
 
-     ,.flush_i(flush_i)
-     ,.sfence_i(commit_pkt.sfence)
-
-     ,.reservation_i(reservation_r)
      ,.ready_o(pipe_mem_ready_lo)
+     ,.reservation_i(reservation_r)
+     ,.flush_i(flush_i)
+     ,.trans_info_i(trans_info_lo)
 
+     ,.sfence_i(commit_pkt.sfence)
      ,.ptw_miss_pkt_i(ptw_miss_pkt)
      ,.ptw_fill_pkt_o(ptw_fill_pkt)
 
@@ -294,11 +302,9 @@ module bp_be_calculator_top
      ,.final_data_o(pipe_mem_final_data_lo)
      ,.early_v_o(pipe_mem_early_data_lo_v)
      ,.final_v_o(pipe_mem_final_data_lo_v)
-
-     ,.trans_info_i(trans_info_lo)
      );
 
-  logic pipe_long_ready_lo, pipe_sys_ready_lo;
+  logic pipe_sys_ready_lo;
   bp_be_pipe_sys
    #(.bp_params_p(bp_params_p))
    pipe_sys
@@ -307,17 +313,14 @@ module bp_be_calculator_top
      ,.cfg_bus_i(cfg_bus_i)
 
      ,.ready_o(pipe_sys_ready_lo)
-     ,.pipe_mem_ready_i(pipe_mem_ready_lo)
-     ,.pipe_long_ready_i(pipe_long_ready_lo)
-
      ,.reservation_i(reservation_r)
      ,.flush_i(flush_i)
 
      ,.ptw_miss_pkt_o(ptw_miss_pkt)
      ,.ptw_fill_pkt_i(ptw_fill_pkt)
 
-     ,.commit_v_i(~exc_stage_r[2].nop_v & ~exc_stage_r[2].poison_v)
-     ,.commit_queue_v_i(~exc_stage_r[2].nop_v & ~exc_stage_r[2].roll_v)
+     ,.commit_v_i(exc_stage_r[2].v & ~exc_stage_r[2].poison_v)
+     ,.commit_queue_v_i(exc_stage_r[2].queue_v & ~exc_stage_r[2].roll_v)
      ,.exception_i(exc_stage_r[2].exc)
      ,.commit_pkt_o(commit_pkt)
      ,.iwb_pkt_i(iwb_pkt_o)
@@ -326,9 +329,8 @@ module bp_be_calculator_top
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
+     ,.pending_irq_o(pending_irq_o)
 
-     ,.exc_v_o(pipe_sys_exc_v_lo)
-     ,.miss_v_o(pipe_sys_miss_v_lo)
      ,.data_o(pipe_sys_data_lo)
      ,.v_o(pipe_sys_data_lo_v)
 
@@ -338,13 +340,16 @@ module bp_be_calculator_top
      );
 
   // Floating point pipe: 4/5 cycle latency
+  logic pipe_fma_ready_lo;
   bp_be_pipe_fma
    #(.bp_params_p(bp_params_p), .imul_latency_p(4), .fma_latency_p(5))
    pipe_fma
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.ready_o(pipe_fma_ready_lo)
      ,.reservation_i(reservation_r)
+     ,.flush_i(flush_i)
      ,.frm_dyn_i(frm_dyn_lo)
 
      ,.imul_data_o(pipe_mul_data_lo)
@@ -355,15 +360,16 @@ module bp_be_calculator_top
      );
 
   // Variable length pipeline, used for long (potentially scoreboarded operations)
+  logic pipe_long_ready_lo;
   bp_be_pipe_long
    #(.bp_params_p(bp_params_p))
    pipe_long
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.ready_o(pipe_long_ready_lo)
      ,.reservation_i(reservation_r)
      ,.flush_i(flush_i)
-     ,.ready_o(pipe_long_ready_lo)
      ,.frm_dyn_i(frm_dyn_lo)
 
      ,.iwb_pkt_o(long_iwb_pkt)
@@ -443,24 +449,26 @@ module bp_be_calculator_top
           // Normally, shift down in the pipe
           exc_stage_n[i] = (i == 0) ? '0 : exc_stage_r[i-1];
         end
-          exc_stage_n[0].nop_v                  |= ~reservation_n.v;
+          exc_stage_n[0].v                      |= reservation_n.v;
+          exc_stage_n[0].queue_v                |= reservation_n.v & reservation_n.decode.queue_v;
 
-          exc_stage_n[0].roll_v                 |= pipe_sys_miss_v_lo;
-          exc_stage_n[1].roll_v                 |= pipe_sys_miss_v_lo;
-          exc_stage_n[2].roll_v                 |= pipe_sys_miss_v_lo;
-          exc_stage_n[3].roll_v                 |= pipe_sys_miss_v_lo;
+          exc_stage_n[0].roll_v                 |= commit_pkt.rollback;
+          exc_stage_n[1].roll_v                 |= commit_pkt.rollback;
+          exc_stage_n[2].roll_v                 |= commit_pkt.rollback;
+          exc_stage_n[3].roll_v                 |= commit_pkt.rollback;
 
           exc_stage_n[0].poison_v               |= reservation_n.poison;
           exc_stage_n[1].poison_v               |= flush_i;
           exc_stage_n[2].poison_v               |= flush_i;
-          // We only poison on exception or cache miss, because we also flush
-          // on, for instance, fence.i
-          exc_stage_n[3].poison_v               |= pipe_sys_miss_v_lo | pipe_sys_exc_v_lo;
+          exc_stage_n[3].poison_v               |= ~commit_pkt.instret;
 
+          exc_stage_n[0].exc._interrupt         |= reservation_n.decode._interrupt;
           exc_stage_n[0].exc.itlb_miss          |= reservation_n.decode.itlb_miss;
           exc_stage_n[0].exc.icache_miss        |= reservation_n.decode.icache_miss;
           exc_stage_n[0].exc.instr_access_fault |= reservation_n.decode.instr_access_fault;
           exc_stage_n[0].exc.instr_page_fault   |= reservation_n.decode.instr_page_fault;
+          exc_stage_n[0].exc.load_page_fault    |= reservation_n.decode.load_page_fault;
+          exc_stage_n[0].exc.store_page_fault   |= reservation_n.decode.store_page_fault;
           exc_stage_n[0].exc.illegal_instr      |= reservation_n.decode.illegal_instr;
           exc_stage_n[0].exc.ebreak             |= reservation_n.decode.ebreak;
           exc_stage_n[0].exc.ecall              |= reservation_n.decode.ecall;

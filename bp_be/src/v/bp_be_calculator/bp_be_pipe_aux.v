@@ -26,11 +26,13 @@ module bp_be_pipe_aux
   (input                               clk_i
    , input                             reset_i
 
+   , output logic                      ready_o
    , input [dispatch_pkt_width_lp-1:0] reservation_i
+   , input                             flush_i
    , input rv64_frm_e                  frm_dyn_i
 
    // Pipeline results
-   , output [dpath_width_p-1:0]        data_o
+   , output logic [dpath_width_p-1:0]  data_o
    , output rv64_fflags_s              fflags_o
    , output                            v_o
    );
@@ -503,6 +505,8 @@ module bp_be_pipe_aux
      ,.data_i({faux_fflags, faux_result, faux_v_li})
      ,.data_o({fflags_o, data_o, v_o})
      );
+
+  assign ready_o = 1'b1;
 
 endmodule
 

@@ -25,6 +25,7 @@ module bp_be_scheduler
    , localparam issue_pkt_width_lp = `bp_be_issue_pkt_width(vaddr_width_p, branch_metadata_fwd_width_p)
    , localparam dispatch_pkt_width_lp = `bp_be_dispatch_pkt_width(vaddr_width_p)
    , localparam isd_status_width_lp = `bp_be_isd_status_width(vaddr_width_p, branch_metadata_fwd_width_p)
+   , localparam ptw_fill_pkt_width_lp = `bp_be_ptw_fill_pkt_width(vaddr_width_p)
    , localparam commit_pkt_width_lp = `bp_be_commit_pkt_width(vaddr_width_p)
    , localparam wb_pkt_width_lp     = `bp_be_wb_pkt_width(vaddr_width_p)
    )
@@ -37,6 +38,7 @@ module bp_be_scheduler
   , input                              dispatch_v_i
   , input                              suppress_iss_i
   , input                              fpu_en_i
+  , input                              pending_irq_i
 
   // Fetch interface
   , input [fe_queue_width_lp-1:0]      fe_queue_i
@@ -47,6 +49,7 @@ module bp_be_scheduler
   , output [dispatch_pkt_width_lp-1:0] dispatch_pkt_o
 
   , input [commit_pkt_width_lp-1:0]    commit_pkt_i
+  , input [ptw_fill_pkt_width_lp-1:0]  ptw_fill_pkt_i
   , input [wb_pkt_width_lp-1:0]        iwb_pkt_i
   , input [wb_pkt_width_lp-1:0]        fwb_pkt_i
   );
@@ -60,6 +63,7 @@ module bp_be_scheduler
   bp_be_isd_status_s isd_status;
   rv64_instr_s       instr;
   bp_be_commit_pkt_s commit_pkt;
+  bp_be_ptw_fill_pkt_s ptw_fill_pkt;
   bp_be_wb_pkt_s     iwb_pkt, fwb_pkt;
 
   bp_fe_queue_s fe_queue_lo;
@@ -67,6 +71,7 @@ module bp_be_scheduler
 
   assign isd_status_o    = isd_status;
   assign instr           = fe_queue_lo.msg.fetch.instr;
+  assign ptw_fill_pkt    = ptw_fill_pkt_i;
   assign commit_pkt      = commit_pkt_i;
   assign iwb_pkt         = iwb_pkt_i;
   assign fwb_pkt         = fwb_pkt_i;
@@ -96,10 +101,6 @@ module bp_be_scheduler
      ,.preissue_pkt_o(preissue_pkt)
      ,.issue_pkt_o(issue_pkt)
      );
-
-  // Interface handshakes
-  assign fe_queue_yumi_li = ~suppress_iss_i & fe_queue_v_lo & dispatch_v_i;
-  wire issue_v = fe_queue_yumi_li;
 
   logic [dword_width_p-1:0] irf_rs1, irf_rs2;
   bp_be_regfile
@@ -134,14 +135,33 @@ module bp_be_scheduler
      );
 
   // Decode the dispatched instruction
+  bp_fe_exception_code_e fe_exc_li;
+  wire fe_exc_not_instr_li = (fe_queue_lo.msg_type == e_fe_exception);
+  assign fe_exc_li = fe_queue_lo.msg.exception.exception_code;
+
+  bp_be_exception_code_e be_exc_li;
+  wire be_exc_not_instr_li = ptw_fill_pkt.instr_page_fault_v
+                             | ptw_fill_pkt.load_page_fault_v
+                             | ptw_fill_pkt.store_page_fault_v
+                             | pending_irq_i;
+  assign be_exc_li = ptw_fill_pkt.instr_page_fault_v
+                     ? e_ptw_instr_page_fault
+                     : ptw_fill_pkt.load_page_fault_v
+                       ? e_ptw_load_page_fault
+                         : ptw_fill_pkt.store_page_fault_v
+                         ? e_ptw_store_page_fault
+                         : e_clint_take_interrupt;
   bp_be_decode_s            decoded;
   logic [dword_width_p-1:0] decoded_imm_lo;
-  wire fe_exc_not_instr_li = (fe_queue_lo.msg_type == e_fe_exception);
   bp_be_instr_decoder
    #(.bp_params_p(bp_params_p))
    instr_decoder
-     (.fe_exc_not_instr_i(fe_exc_not_instr_li)
-     ,.fe_exc_i(fe_queue_lo.msg.exception.exception_code)
+    (.fe_exc_not_instr_i(fe_exc_not_instr_li)
+     ,.fe_exc_i(fe_exc_li)
+     ,.fe_exc_vaddr_i(fe_queue_lo.msg.exception.vaddr)
+     ,.be_exc_not_instr_i(be_exc_not_instr_li)
+     ,.be_exc_i(be_exc_li)
+     ,.be_exc_vaddr_i(ptw_fill_pkt.vaddr)
      ,.instr_i(fe_queue_lo.msg.fetch.instr)
 
      ,.decode_o(decoded)
@@ -149,6 +169,8 @@ module bp_be_scheduler
 
      ,.fpu_en_i(fpu_en_i)
      );
+
+  assign fe_queue_yumi_li = fe_queue_v_lo & dispatch_v_i & ~suppress_iss_i & ~be_exc_not_instr_li;
 
   bp_be_dispatch_pkt_s dispatch_pkt;
   always_comb
@@ -171,7 +193,7 @@ module bp_be_scheduler
       isd_status.isd_rs3_addr = instr.t.fmatype.rs3_addr;
 
       // Form dispatch packet
-      dispatch_pkt.v        = fe_queue_yumi_li;
+      dispatch_pkt.v        = fe_queue_yumi_li | be_exc_not_instr_li;
       dispatch_pkt.poison   = (poison_isd_i | ~dispatch_pkt.v);
       dispatch_pkt.pc       = expected_npc_i;
       dispatch_pkt.instr    = instr;

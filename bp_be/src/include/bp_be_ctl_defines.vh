@@ -192,7 +192,7 @@
   
   typedef struct packed
   {
-    logic                             v;
+    logic                             queue_v;
   
     logic                             pipe_ctl_v;
     logic                             pipe_int_v;
@@ -211,9 +211,6 @@
     logic                             dcache_w_v;
     logic                             late_iwb_v;
     logic                             late_fwb_v;
-    logic                             fencei_v;
-    logic                             csr_w_v;
-    logic                             csr_r_v;
     logic                             csr_v;
     logic                             mem_v;
     logic                             opw_v;
@@ -225,10 +222,13 @@
     bp_be_src2_e                      src2_sel;
     bp_be_baddr_e                     baddr_sel;
   
+    logic                             _interrupt;
     logic                             itlb_miss;
     logic                             icache_miss;
     logic                             instr_access_fault;
     logic                             instr_page_fault;
+    logic                             load_page_fault;
+    logic                             store_page_fault;
     logic                             illegal_instr;
     logic                             ebreak;
     logic                             ecall;
@@ -251,6 +251,7 @@
     logic instr_misaligned;
   
     // BP "exceptions"
+    logic _interrupt;
     logic itlb_miss;
     logic icache_miss;
     logic dtlb_miss;
@@ -260,12 +261,21 @@
   
   typedef struct packed
   {
-    logic nop_v;
+    logic v;
+    logic queue_v;
     logic poison_v;
     logic roll_v;
   
     bp_be_exception_s exc;
   }  bp_be_exc_stage_s;
+
+  typedef enum [1:0]
+  {
+    e_clint_take_interrupt
+    ,e_ptw_instr_page_fault
+    ,e_ptw_load_page_fault
+    ,e_ptw_store_page_fault
+  }  bp_be_exception_code_e;
 
 `define bp_be_fu_op_width                                                                          \
   (`BSG_MAX($bits(bp_be_int_fu_op_e), `BSG_MAX($bits(bp_be_dcache_fu_op_e), $bits(bp_be_csr_fu_op_e))))

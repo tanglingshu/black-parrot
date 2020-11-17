@@ -92,7 +92,7 @@ module bp_be_top
 
   bp_be_isd_status_s isd_status;
   logic [vaddr_width_p-1:0] expected_npc_lo;
-  logic poison_isd_lo, suppress_iss_lo;
+  logic poison_isd_lo, suppress_iss_lo, pending_irq_lo;
 
   logic fpu_en_lo;
   logic fe_cmd_full_lo;
@@ -157,6 +157,7 @@ module bp_be_top
      ,.dispatch_v_i(chk_dispatch_v)
      ,.suppress_iss_i(suppress_iss_lo)
      ,.fpu_en_i(fpu_en_lo)
+     ,.pending_irq_i(pending_irq_lo)
 
      ,.fe_queue_i(fe_queue_i)
      ,.fe_queue_v_i(fe_queue_v_i)
@@ -165,6 +166,7 @@ module bp_be_top
      ,.dispatch_pkt_o(dispatch_pkt)
 
      ,.commit_pkt_i(commit_pkt)
+     ,.ptw_fill_pkt_i(ptw_fill_pkt)
      ,.iwb_pkt_i(iwb_pkt)
      ,.fwb_pkt_i(fwb_pkt)
      );
@@ -221,6 +223,7 @@ module bp_be_top
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
+     ,.pending_irq_o(pending_irq_lo)
      );
 
 endmodule
