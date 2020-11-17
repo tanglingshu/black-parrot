@@ -31,7 +31,7 @@
   typedef struct packed                                                                            \
   {                                                                                                \
     logic                                    v;                                                    \
-    logic                                    poison;                                               \
+    logic                                    queue_v;                                              \
     logic [vaddr_width_mp-1:0]               pc;                                                   \
     rv64_instr_s                             instr;                                                \
     bp_be_decode_s                           decode;                                               \
@@ -94,7 +94,7 @@
                                                                                                    \
   typedef struct packed                                                                            \
   {                                                                                                \
-    logic                           v;                                                             \
+    logic                           npc_w_v;                                                       \
     logic                           queue_v;                                                       \
     logic                           instret;                                                       \
     logic [vaddr_width_p-1:0]       pc;                                                            \

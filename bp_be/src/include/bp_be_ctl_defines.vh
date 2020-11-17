@@ -192,8 +192,6 @@
   
   typedef struct packed
   {
-    logic                             v;
-  
     logic                             pipe_ctl_v;
     logic                             pipe_int_v;
     logic                             pipe_mem_early_v;
@@ -211,9 +209,6 @@
     logic                             dcache_w_v;
     logic                             late_iwb_v;
     logic                             late_fwb_v;
-    logic                             fencei_v;
-    logic                             csr_w_v;
-    logic                             csr_r_v;
     logic                             csr_v;
     logic                             mem_v;
     logic                             opw_v;
@@ -261,6 +256,7 @@
   typedef struct packed
   {
     logic nop_v;
+    logic inj_v;
     logic poison_v;
     logic roll_v;
   

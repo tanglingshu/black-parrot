@@ -88,7 +88,7 @@ module bp_be_pipe_int
   // Shift back the ALU result from the top field for word width operations
   wire [dword_width_p-1:0] opw_result = $signed(alu_result) >>> word_width_p;
   assign data_o = decode.opw_v ? opw_result : alu_result;
-  assign v_o    = reservation.v & ~reservation.poison & reservation.decode.pipe_int_v;
+  assign v_o    = reservation.v & reservation.decode.pipe_int_v;
 
 endmodule
 

@@ -219,7 +219,7 @@ module bp_be_detector
   bp_be_dep_status_s dep_status_n;
   always_ff @(posedge clk_i)
     begin
-      dep_status_r[0]   <= (dispatch_pkt.v & ~dispatch_pkt.poison) ? dep_status_n : '0;
+      dep_status_r[0]   <= dispatch_pkt.v ? dep_status_n : '0;
       dep_status_r[3:1] <= dep_status_r[2:0];
     end
 

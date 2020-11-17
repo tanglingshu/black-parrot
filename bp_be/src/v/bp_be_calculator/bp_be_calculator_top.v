@@ -317,7 +317,7 @@ module bp_be_calculator_top
      ,.ptw_fill_pkt_i(ptw_fill_pkt)
 
      ,.commit_v_i(~exc_stage_r[2].nop_v & ~exc_stage_r[2].poison_v)
-     ,.commit_queue_v_i(~exc_stage_r[2].nop_v & ~exc_stage_r[2].roll_v)
+     ,.commit_queue_v_i(~exc_stage_r[2].inj_v & ~exc_stage_r[2].roll_v)
      ,.exception_i(exc_stage_r[2].exc)
      ,.commit_pkt_o(commit_pkt)
      ,.iwb_pkt_i(iwb_pkt_o)
@@ -444,13 +444,14 @@ module bp_be_calculator_top
           exc_stage_n[i] = (i == 0) ? '0 : exc_stage_r[i-1];
         end
           exc_stage_n[0].nop_v                  |= ~reservation_n.v;
+          exc_stage_n[0].inj_v                  |= ~reservation_n.queue_v;
 
           exc_stage_n[0].roll_v                 |= pipe_sys_miss_v_lo;
           exc_stage_n[1].roll_v                 |= pipe_sys_miss_v_lo;
           exc_stage_n[2].roll_v                 |= pipe_sys_miss_v_lo;
           exc_stage_n[3].roll_v                 |= pipe_sys_miss_v_lo;
 
-          exc_stage_n[0].poison_v               |= reservation_n.poison;
+          exc_stage_n[0].poison_v               |= flush_i | ~reservation_n.v;
           exc_stage_n[1].poison_v               |= flush_i;
           exc_stage_n[2].poison_v               |= flush_i;
           // We only poison on exception or cache miss, because we also flush

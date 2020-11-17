@@ -343,7 +343,7 @@ module bp_be_pipe_mem
         dcache_ptag_v   = ptw_dcache_ptag_v;
       end
       else begin
-        dcache_pkt_v = reservation.v & ~reservation.poison & (decode.pipe_mem_early_v | decode.pipe_mem_final_v);
+        dcache_pkt_v = reservation.v & (decode.pipe_mem_early_v | decode.pipe_mem_final_v);
         // TODO: Use dcache opcode directly
         dcache_pkt.opcode      = bp_be_dcache_fu_op_e'(decode.fu_op);
         dcache_pkt.page_offset = eaddr[0+:page_offset_width_p];
@@ -380,7 +380,7 @@ module bp_be_pipe_mem
   assign early_data_o           = dcache_early_data;
   assign final_data_o           = dcache_final_data;
 
-  wire early_v_li = reservation.v & ~reservation.poison & reservation.decode.pipe_mem_early_v;
+  wire early_v_li = reservation.v & reservation.decode.pipe_mem_early_v;
   bsg_dff_chain
    #(.width_p(1), .num_stages_p(1))
    early_chain
@@ -390,7 +390,7 @@ module bp_be_pipe_mem
      ,.data_o(early_v_o)
      );
 
-  wire final_v_li = reservation.v & ~reservation.poison & reservation.decode.pipe_mem_final_v;
+  wire final_v_li = reservation.v & reservation.decode.pipe_mem_final_v;
   bsg_dff_chain
    #(.width_p(1), .num_stages_p(2))
    final_chain
