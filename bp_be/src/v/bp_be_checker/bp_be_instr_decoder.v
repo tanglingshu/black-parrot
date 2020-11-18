@@ -553,8 +553,6 @@ module bp_be_instr_decoder
       if (be_exc_not_instr_i)
         begin
           decode = '0;
-          decode.pipe_sys_v = 1'b1;
-          decode.csr_v = 1'b1;
           casez (be_exc_i)
             e_clint_take_interrupt: decode._interrupt = 1'b1;
             default: begin end
@@ -563,8 +561,6 @@ module bp_be_instr_decoder
       else if (fe_exc_not_instr_i)
         begin
           decode = '0;
-          decode.pipe_sys_v = 1'b1;
-          decode.csr_v = 1'b1;
           casez (fe_exc_i)
             e_instr_access_fault: decode.instr_access_fault = 1'b1;
             e_instr_page_fault  : decode.instr_page_fault   = 1'b1;
@@ -576,8 +572,6 @@ module bp_be_instr_decoder
       else if (illegal_instr)
         begin
           decode = '0;
-          decode.pipe_sys_v = 1'b1;
-          decode.csr_v = 1'b1;
           decode.illegal_instr = 1'b1;
         end
 
