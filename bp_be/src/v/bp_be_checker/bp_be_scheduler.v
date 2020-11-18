@@ -37,6 +37,7 @@ module bp_be_scheduler
   , input                              dispatch_v_i
   , input                              suppress_iss_i
   , input                              fpu_en_i
+  , input                              pending_irq_i
 
   // Fetch interface
   , input [fe_queue_width_lp-1:0]      fe_queue_i
@@ -97,10 +98,6 @@ module bp_be_scheduler
      ,.issue_pkt_o(issue_pkt)
      );
 
-  // Interface handshakes
-  assign fe_queue_yumi_li = ~suppress_iss_i & fe_queue_v_lo & dispatch_v_i;
-  wire issue_v = fe_queue_yumi_li;
-
   logic [dword_width_p-1:0] irf_rs1, irf_rs2;
   bp_be_regfile
   #(.bp_params_p(bp_params_p), .read_ports_p(2), .data_width_p(dword_width_p))
@@ -134,14 +131,23 @@ module bp_be_scheduler
      );
 
   // Decode the dispatched instruction
+  bp_fe_exception_code_e fe_exc_li;
+  wire fe_exc_not_instr_li = (fe_queue_lo.msg_type == e_fe_exception);
+  assign fe_exc_li = fe_queue_lo.msg.exception.exception_code;
+
+  bp_be_exception_code_e be_exc_li;
+  wire be_exc_not_instr_li = pending_irq_i;
+  assign be_exc_li = e_clint_take_interrupt;
+
   bp_be_decode_s            decoded;
   logic [dword_width_p-1:0] decoded_imm_lo;
-  wire fe_exc_not_instr_li = (fe_queue_lo.msg_type == e_fe_exception);
   bp_be_instr_decoder
    #(.bp_params_p(bp_params_p))
    instr_decoder
-     (.fe_exc_not_instr_i(fe_exc_not_instr_li)
-     ,.fe_exc_i(fe_queue_lo.msg.exception.exception_code)
+    (.fe_exc_not_instr_i(fe_exc_not_instr_li)
+     ,.fe_exc_i(fe_exc_li)
+     ,.be_exc_not_instr_i(be_exc_not_instr_li)
+     ,.be_exc_i(be_exc_li)
      ,.instr_i(fe_queue_lo.msg.fetch.instr)
 
      ,.decode_o(decoded)
@@ -149,6 +155,8 @@ module bp_be_scheduler
 
      ,.fpu_en_i(fpu_en_i)
      );
+
+  assign fe_queue_yumi_li = fe_queue_v_lo & ~suppress_iss_i & ~be_exc_not_instr_li & dispatch_v_i;
 
   bp_be_dispatch_pkt_s dispatch_pkt;
   always_comb
@@ -171,7 +179,7 @@ module bp_be_scheduler
       isd_status.isd_rs3_addr = instr.t.fmatype.rs3_addr;
 
       // Form dispatch packet
-      dispatch_pkt.v        = fe_queue_yumi_li & ~poison_isd_i;
+      dispatch_pkt.v        = (fe_queue_yumi_li & ~poison_isd_i) || be_exc_not_instr_li;
       dispatch_pkt.queue_v  = fe_queue_yumi_li;
       dispatch_pkt.pc       = expected_npc_i;
       dispatch_pkt.instr    = instr;

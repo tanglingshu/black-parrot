@@ -24,12 +24,13 @@ module bp_be_instr_decoder
    `declare_bp_proc_params(bp_params_p)
 
    // Generated parameters
-   , localparam instr_width_lp = rv64_instr_width_gp
    , localparam decode_width_lp = `bp_be_decode_width
    )
   (input                             fe_exc_not_instr_i
    , input bp_fe_exception_code_e    fe_exc_i
-   , input [instr_width_lp-1:0]      instr_i
+   , input                           be_exc_not_instr_i
+   , input bp_be_exception_code_e    be_exc_i
+   , input [instr_width_p-1:0]       instr_i
 
    , output [decode_width_lp-1:0]    decode_o
    , output [dword_width_p-1:0]      imm_o
@@ -549,7 +550,17 @@ module bp_be_instr_decoder
         default : illegal_instr = 1'b1;
       endcase
 
-      if (fe_exc_not_instr_i)
+      if (be_exc_not_instr_i)
+        begin
+          decode = '0;
+          decode.pipe_sys_v = 1'b1;
+          decode.csr_v = 1'b1;
+          casez (be_exc_i)
+            e_clint_take_interrupt: decode._interrupt = 1'b1;
+            default: begin end
+          endcase
+        end
+      else if (fe_exc_not_instr_i)
         begin
           decode = '0;
           decode.pipe_sys_v = 1'b1;
@@ -559,6 +570,7 @@ module bp_be_instr_decoder
             e_instr_page_fault  : decode.instr_page_fault   = 1'b1;
             e_itlb_miss         : decode.itlb_miss          = 1'b1;
             e_icache_miss       : decode.icache_miss        = 1'b1;
+            default: begin end
           endcase
         end
       else if (illegal_instr)

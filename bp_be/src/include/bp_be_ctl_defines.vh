@@ -220,6 +220,7 @@
     bp_be_src2_e                      src2_sel;
     bp_be_baddr_e                     baddr_sel;
   
+    logic                             _interrupt;
     logic                             itlb_miss;
     logic                             icache_miss;
     logic                             instr_access_fault;
@@ -246,6 +247,7 @@
     logic instr_misaligned;
   
     // BP "exceptions"
+    logic _interrupt;
     logic itlb_miss;
     logic icache_miss;
     logic dtlb_miss;
@@ -255,13 +257,18 @@
   
   typedef struct packed
   {
-    logic nop_v;
-    logic inj_v;
+    logic v;
+    logic queue_v;
     logic poison_v;
     logic roll_v;
   
     bp_be_exception_s exc;
   }  bp_be_exc_stage_s;
+
+  typedef enum logic [1:0]
+  {
+    e_clint_take_interrupt
+  } bp_be_exception_code_e;
 
 `define bp_be_fu_op_width                                                                          \
   (`BSG_MAX($bits(bp_be_int_fu_op_e), `BSG_MAX($bits(bp_be_dcache_fu_op_e), $bits(bp_be_csr_fu_op_e))))

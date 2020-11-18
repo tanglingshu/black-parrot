@@ -36,7 +36,6 @@ module bp_be_detector
    , input                             credits_empty_i
    , input                             long_ready_i
    , input                             mem_ready_i
-   , input                             sys_ready_i
 
    // Pipeline control signals from the checker to the calculator
    , output                            chk_dispatch_v_o
@@ -188,7 +187,6 @@ module bp_be_detector
       struct_haz_v = cfg_bus_cast_i.freeze
                      | ~mem_ready_i
                      | ~long_ready_i
-                     | ~sys_ready_i
                      | queue_haz_v;
     end
 

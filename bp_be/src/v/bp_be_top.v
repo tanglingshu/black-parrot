@@ -85,7 +85,7 @@ module bp_be_top
   bp_be_ptw_miss_pkt_s ptw_miss_pkt;
   bp_be_ptw_fill_pkt_s ptw_fill_pkt;
 
-  logic chk_dispatch_v;
+  logic pending_irq_lo, chk_dispatch_v;
 
   bp_be_commit_pkt_s commit_pkt;
   bp_be_wb_pkt_s iwb_pkt, fwb_pkt;
@@ -96,8 +96,7 @@ module bp_be_top
 
   logic fpu_en_lo;
   logic fe_cmd_full_lo;
-  logic mem_ready_lo, long_ready_lo, sys_ready_lo;
-
+  logic mem_ready_lo, long_ready_lo;
 
   logic flush;
   bp_be_director
@@ -139,7 +138,6 @@ module bp_be_top
      ,.credits_empty_i(cache_req_credits_empty_i)
      ,.mem_ready_i(mem_ready_lo)
      ,.long_ready_i(long_ready_lo)
-     ,.sys_ready_i(sys_ready_lo)
 
      ,.chk_dispatch_v_o(chk_dispatch_v)
      ,.dispatch_pkt_i(dispatch_pkt)
@@ -157,6 +155,7 @@ module bp_be_top
      ,.dispatch_v_i(chk_dispatch_v)
      ,.suppress_iss_i(suppress_iss_lo)
      ,.fpu_en_i(fpu_en_lo)
+     ,.pending_irq_i(pending_irq_lo)
 
      ,.fe_queue_i(fe_queue_i)
      ,.fe_queue_v_i(fe_queue_v_i)
@@ -184,7 +183,6 @@ module bp_be_top
      ,.fpu_en_o(fpu_en_lo)
      ,.mem_ready_o(mem_ready_lo)
      ,.long_ready_o(long_ready_lo)
-     ,.sys_ready_o(sys_ready_lo)
 
      ,.ptw_fill_pkt_o(ptw_fill_pkt)
 
@@ -221,6 +219,7 @@ module bp_be_top
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
+     ,.pending_irq_o(pending_irq_lo)
      );
 
 endmodule

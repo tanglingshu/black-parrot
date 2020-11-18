@@ -35,10 +35,6 @@ module bp_be_pipe_sys
    , input [dispatch_pkt_width_lp-1:0]    reservation_i
    , input                                flush_i
 
-   , output                               ready_o
-   , input                                pipe_mem_ready_i
-   , input                                pipe_long_ready_i
-
    , input                                commit_v_i
    , input                                commit_queue_v_i
    , input [exception_width_lp-1:0]       exception_i
@@ -58,6 +54,7 @@ module bp_be_pipe_sys
    , input                                timer_irq_i
    , input                                software_irq_i
    , input                                external_irq_i
+   , output logic                         pending_irq_o
 
    , output [trans_info_width_lp-1:0]     trans_info_o
    , output rv64_frm_e                    frm_dyn_o
@@ -172,7 +169,6 @@ module bp_be_pipe_sys
   wire [instr_width_p-1:0] exception_instr_li = commit_instr_r;
 
   logic [dword_width_p-1:0] csr_data_lo;
-  logic interrupt_ready_lo, interrupt_v_li;
   bp_be_csr
    #(.bp_params_p(bp_params_p))
     csr
@@ -198,16 +194,14 @@ module bp_be_pipe_sys
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
-     ,.interrupt_ready_o(interrupt_ready_lo)
-     ,.interrupt_v_i(interrupt_v_li)
+     ,.interrupt_ready_o(pending_irq_o)
+     ,.interrupt_v_i(commit_v_i & exception_li._interrupt)
 
      ,.commit_pkt_o(commit_pkt)
      ,.trans_info_o(trans_info)
      ,.frm_dyn_o(frm_dyn_o)
      ,.fpu_en_o(fpu_en_o)
      );
-
-  assign interrupt_v_li   = interrupt_ready_lo & pipe_mem_ready_i & pipe_long_ready_i & ~commit_v_i;
 
   always_ff @(posedge clk_i)
     begin
@@ -221,7 +215,6 @@ module bp_be_pipe_sys
       commit_instr_r  <= commit_ninstr_r;
     end
 
-  assign ready_o          = ~interrupt_ready_lo;
   assign data_o           = csr_data_lo;
   assign exc_v_o          = commit_pkt.exception;
   assign miss_v_o         = commit_pkt.rollback;

@@ -47,7 +47,6 @@ module bp_be_calculator_top
   , output                                          fpu_en_o
   , output                                          long_ready_o
   , output                                          mem_ready_o
-  , output                                          sys_ready_o
 
   , output [ptw_fill_pkt_width_lp-1:0]              ptw_fill_pkt_o
   , output [commit_pkt_width_lp-1:0]                commit_pkt_o
@@ -58,6 +57,7 @@ module bp_be_calculator_top
   , input                                           timer_irq_i
   , input                                           software_irq_i
   , input                                           external_irq_i
+  , output logic                                    pending_irq_o
 
   , output logic [dcache_req_width_lp-1:0]          cache_req_o
   , output logic                                    cache_req_v_o
@@ -298,7 +298,7 @@ module bp_be_calculator_top
      ,.trans_info_i(trans_info_lo)
      );
 
-  logic pipe_long_ready_lo, pipe_sys_ready_lo;
+  logic pipe_long_ready_lo;
   bp_be_pipe_sys
    #(.bp_params_p(bp_params_p))
    pipe_sys
@@ -306,18 +306,14 @@ module bp_be_calculator_top
      ,.reset_i(reset_i)
      ,.cfg_bus_i(cfg_bus_i)
 
-     ,.ready_o(pipe_sys_ready_lo)
-     ,.pipe_mem_ready_i(pipe_mem_ready_lo)
-     ,.pipe_long_ready_i(pipe_long_ready_lo)
-
      ,.reservation_i(reservation_r)
      ,.flush_i(flush_i)
 
      ,.ptw_miss_pkt_o(ptw_miss_pkt)
      ,.ptw_fill_pkt_i(ptw_fill_pkt)
 
-     ,.commit_v_i(~exc_stage_r[2].nop_v & ~exc_stage_r[2].poison_v)
-     ,.commit_queue_v_i(~exc_stage_r[2].inj_v & ~exc_stage_r[2].roll_v)
+     ,.commit_v_i(exc_stage_r[2].v & ~exc_stage_r[2].poison_v)
+     ,.commit_queue_v_i(exc_stage_r[2].queue_v & ~exc_stage_r[2].roll_v)
      ,.exception_i(exc_stage_r[2].exc)
      ,.commit_pkt_o(commit_pkt)
      ,.iwb_pkt_i(iwb_pkt_o)
@@ -326,6 +322,7 @@ module bp_be_calculator_top
      ,.timer_irq_i(timer_irq_i)
      ,.software_irq_i(software_irq_i)
      ,.external_irq_i(external_irq_i)
+     ,.pending_irq_o(pending_irq_o)
 
      ,.exc_v_o(pipe_sys_exc_v_lo)
      ,.miss_v_o(pipe_sys_miss_v_lo)
@@ -443,8 +440,8 @@ module bp_be_calculator_top
           // Normally, shift down in the pipe
           exc_stage_n[i] = (i == 0) ? '0 : exc_stage_r[i-1];
         end
-          exc_stage_n[0].nop_v                  |= ~reservation_n.v;
-          exc_stage_n[0].inj_v                  |= ~reservation_n.queue_v;
+          exc_stage_n[0].v                      |= reservation_n.v;
+          exc_stage_n[0].queue_v                |= reservation_n.queue_v;
 
           exc_stage_n[0].roll_v                 |= pipe_sys_miss_v_lo;
           exc_stage_n[1].roll_v                 |= pipe_sys_miss_v_lo;
@@ -458,6 +455,7 @@ module bp_be_calculator_top
           // on, for instance, fence.i
           exc_stage_n[3].poison_v               |= pipe_sys_miss_v_lo | pipe_sys_exc_v_lo;
 
+          exc_stage_n[0].exc._interrupt         |= reservation_n.decode._interrupt;
           exc_stage_n[0].exc.itlb_miss          |= reservation_n.decode.itlb_miss;
           exc_stage_n[0].exc.icache_miss        |= reservation_n.decode.icache_miss;
           exc_stage_n[0].exc.instr_access_fault |= reservation_n.decode.instr_access_fault;
@@ -492,7 +490,6 @@ module bp_be_calculator_top
 
   assign mem_ready_o  = pipe_mem_ready_lo;
   assign long_ready_o = pipe_long_ready_lo;
-  assign sys_ready_o  = pipe_sys_ready_lo;
 
 endmodule
 
